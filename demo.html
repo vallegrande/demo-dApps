@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>dApps con MetaMask (Holesky)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+</head>
+<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
+
+  <h1 class="text-4xl font-bold text-gray-800 mb-8">🌐 dApps</h1>
+  <button id="connect" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-lg transition">
+    Conectar MetaMask
+  </button>
+
+  <div id="walletModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+    <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg relative">
+      <button id="closeModal" class="absolute top-2 right-2 text-gray-500 hover:text-gray-700">✖</button>
+      <h2 class="text-2xl font-bold text-gray-800 mb-4">💳 Mi Wallet</h2>
+      <p><strong>Cuenta:</strong> <span id="account"></span></p>
+      <p><strong>Balance:</strong> <span id="balance"></span> ETH</p>
+
+      <div class="flex space-x-4 mt-6">
+        <button id="btnSend" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg">Enviar ETH</button>
+        <button id="btnHistory" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg">Ver Historial</button>
+      </div>
+
+      <div id="sendForm" class="hidden mt-6 text-left">
+        <h3 class="font-semibold mb-2">Enviar ETH</h3>
+        <input id="toAddress" type="text" placeholder="Dirección destino" class="w-full border p-2 rounded mb-2"/>
+        <input id="ethAmount" type="number" placeholder="Monto en ETH" step="0.0001" class="w-full border p-2 rounded mb-2"/>
+        <button id="confirmSend" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded">Confirmar</button>
+      </div>
+
+      <div id="history" class="hidden mt-6 text-left">
+        <h3 class="font-semibold mb-2">Últimas transacciones</h3>
+        <ul id="txList" class="list-disc pl-5 text-sm text-gray-600"></ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const connectButton = document.getElementById("connect");
+    const walletModal = document.getElementById("walletModal");
+    const closeModal = document.getElementById("closeModal");
+    const accountSpan = document.getElementById("account");
+    const balanceSpan = document.getElementById("balance");
+    const btnSend = document.getElementById("btnSend");
+    const btnHistory = document.getElementById("btnHistory");
+    const sendForm = document.getElementById("sendForm");
+    const historyDiv = document.getElementById("history");
+    const confirmSend = document.getElementById("confirmSend");
+    const toAddress = document.getElementById("toAddress");
+    const ethAmount = document.getElementById("ethAmount");
+    const txList = document.getElementById("txList");
+
+    let provider, signer, account;
+
+    // 🔑 API Key Holesky Etherscan
+    const ETHERSCAN_API_KEY = "EAA66MPGK4VYGNGBPCYK6I8RDWPXKTG6FD";
+    const API_URL = "https://api-holesky.etherscan.io/api";
+
+    // Conectar MetaMask
+    connectButton.addEventListener("click", async () => {
+      if (window.ethereum) {
+        try {
+          await ethereum.request({ method: "eth_requestAccounts" });
+          provider = new ethers.providers.Web3Provider(window.ethereum);
+          signer = provider.getSigner();
+          account = await signer.getAddress();
+          const balance = await provider.getBalance(account);
+          accountSpan.textContent = account;
+          balanceSpan.textContent = parseFloat(ethers.utils.formatEther(balance)).toFixed(4);
+          walletModal.classList.remove("hidden");
+        } catch (err) {
+          alert("Error al conectar: " + err.message);
+        }
+      } else {
+        alert("Instala MetaMask desde https://metamask.io/"); 
+      }
+    });
+
+    // Cerrar modal
+    closeModal.addEventListener("click", () => {
+      walletModal.classList.add("hidden");
+      sendForm.classList.add("hidden");
+      historyDiv.classList.add("hidden");
+    });
+
+    // Mostrar formulario de envío
+    btnSend.addEventListener("click", () => {
+      historyDiv.classList.add("hidden");
+      sendForm.classList.toggle("hidden");
+    });
+
+    // Confirmar envío
+    confirmSend.addEventListener("click", async () => {
+      try {
+        const tx = await signer.sendTransaction({
+          to: toAddress.value,
+          value: ethers.utils.parseEther(ethAmount.value)
+        });
+        alert("Transacción enviada. Hash: " + tx.hash);
+      } catch (err) {
+        alert("Error al enviar: " + err.message);
+      }
+    });
+
+  // Obtener historial real desde Holesky Etherscan
+btnHistory.addEventListener("click", async () => {
+  sendForm.classList.add("hidden");
+  historyDiv.classList.remove("hidden");
+  txList.innerHTML = "";
+  try {
+    const resp = await fetch(`${API_URL}?module=account&action=txlist&address=${account}&startblock=0&endblock=99999999&page=1&offset=5&sort=desc&apikey=${ETHERSCAN_API_KEY}`);
+    const data = await resp.json();
+    if (data.status === "1") {
+      data.result.forEach(tx => {
+        const li = document.createElement("li");
+        li.className = "bg-gray-100 rounded-lg p-3 mb-2 flex justify-between items-center shadow-sm";
+
+        const tipo = tx.from.toLowerCase() === account.toLowerCase() ? "Enviado" : "Recibido";
+        const ethValue = parseFloat(ethers.utils.formatEther(tx.value)).toFixed(4);
+
+        li.innerHTML = `
+          <div>
+            <p class="font-semibold ${tipo === "Enviado" ? "text-red-600" : "text-green-600"}">${tipo}: ${ethValue} ETH</p>
+            <p class="text-xs text-gray-500">Block: ${tx.blockNumber}</p>
+          </div>
+          <a href="https://holesky.etherscan.io/tx/${tx.hash}" target="_blank" class="text-blue-600 hover:text-blue-800" title="Ver en Etherscan">
+            👁
+          </a>
+        `;
+        txList.appendChild(li);
+      });
+    } else {
+      txList.innerHTML = "<li>No se encontraron transacciones.</li>";
+    }
+  } catch (err) {
+    txList.innerHTML = "<li>Error al obtener historial.</li>";
+  }
+});
+
+  </script>
+</body>
+</html>
