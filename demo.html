@@ -1,30 +1,51 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>dApps con MetaMask (Holesky)</title>
+
+  <!-- TailwindCSS -->
   <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Ethers.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/5.7.2/ethers.umd.min.js"></script>
+
+  <!-- jsPDF + AutoTable -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
 </head>
-<body class="bg-gray-100 flex flex-col items-center justify-center min-h-screen p-4">
+<body class="bg-gray-100 flex flex-col items-center min-h-screen p-6">
 
-  <h1 class="text-4xl font-bold text-gray-800 mb-8">🌐 dApps</h1>
-  <button id="connect" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg shadow-lg transition">
-    Conectar MetaMask
-  </button>
+  <!-- HEADER -->
+  <header class="w-full max-w-3xl bg-white shadow-lg rounded-xl p-6 flex justify-between items-center mb-8">
+    <div class="flex items-center space-x-3">
+      <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/MetaMask_Fox.svg/1200px-MetaMask_Fox.svg.png"
+           class="w-10 h-10" alt="MetaMask"/>
+      <h1 class="text-3xl font-bold text-gray-800">dApps - Holesky</h1>
+    </div>
+    <button id="connect"
+      class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl shadow-lg transition">
+      Conectar MetaMask
+    </button>
+  </header>
 
-  <div id="walletModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+  <!-- MODAL -->
+  <div id="walletModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
     <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-lg relative">
-      <button id="closeModal" class="absolute top-2 right-2 text-gray-500 hover:text-gray-700">✖</button>
+      <button id="closeModal" class="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-xl">✖</button>
+      
       <h2 class="text-2xl font-bold text-gray-800 mb-4">💳 Mi Wallet</h2>
-      <p><strong>Cuenta:</strong> <span id="account"></span></p>
-      <p><strong>Balance:</strong> <span id="balance"></span> ETH</p>
+      <p><strong>Cuenta:</strong> <span id="account" class="text-blue-600"></span></p>
+      <p><strong>Balance:</strong> <span id="balance" class="text-green-600"></span> ETH</p>
 
+      <!-- BOTONES -->
       <div class="flex space-x-4 mt-6">
-        <button id="btnSend" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg">Enviar ETH</button>
-        <button id="btnHistory" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg">Ver Historial</button>
+        <button id="btnSend" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-lg shadow">Enviar ETH</button>
+        <button id="btnHistory" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white py-2 rounded-lg shadow">Ver Historial</button>
       </div>
 
+      <!-- FORMULARIO ENVIAR ETH -->
       <div id="sendForm" class="hidden mt-6 text-left">
         <h3 class="font-semibold mb-2">Enviar ETH</h3>
         <input id="toAddress" type="text" placeholder="Dirección destino" class="w-full border p-2 rounded mb-2"/>
@@ -32,9 +53,11 @@
         <button id="confirmSend" class="bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded">Confirmar</button>
       </div>
 
+      <!-- HISTORIAL -->
       <div id="history" class="hidden mt-6 text-left">
-        <h3 class="font-semibold mb-2">Últimas transacciones</h3>
-        <ul id="txList" class="list-disc pl-5 text-sm text-gray-600"></ul>
+        <h3 class="font-semibold mb-3 text-lg">📜 Últimas transacciones</h3>
+        <ul id="txList" class="space-y-3"></ul>
+        <button id="exportPDF" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg shadow">📄 Exportar PDF</button>
       </div>
     </div>
   </div>
@@ -53,10 +76,11 @@
     const toAddress = document.getElementById("toAddress");
     const ethAmount = document.getElementById("ethAmount");
     const txList = document.getElementById("txList");
+    const exportPDF = document.getElementById("exportPDF");
 
     let provider, signer, account;
+    let transactions = [];
 
-    // 🔑 API Key Holesky Etherscan
     const ETHERSCAN_API_KEY = "EAA66MPGK4VYGNGBPCYK6I8RDWPXKTG6FD";
     const API_URL = "https://api-holesky.etherscan.io/api";
 
@@ -76,71 +100,164 @@
           alert("Error al conectar: " + err.message);
         }
       } else {
-        alert("Instala MetaMask desde https://metamask.io/"); 
+        alert("Instala MetaMask desde https://metamask.io/");
       }
     });
 
-    // Cerrar modal
     closeModal.addEventListener("click", () => {
       walletModal.classList.add("hidden");
       sendForm.classList.add("hidden");
       historyDiv.classList.add("hidden");
     });
 
-    // Mostrar formulario de envío
     btnSend.addEventListener("click", () => {
       historyDiv.classList.add("hidden");
       sendForm.classList.toggle("hidden");
     });
 
-    // Confirmar envío
+    // Enviar ETH
     confirmSend.addEventListener("click", async () => {
       try {
         const tx = await signer.sendTransaction({
           to: toAddress.value,
           value: ethers.utils.parseEther(ethAmount.value)
         });
-        alert("Transacción enviada. Hash: " + tx.hash);
+
+        const receipt = await tx.wait();
+        const gasUsed = ethers.utils.formatEther(receipt.gasUsed.mul(tx.gasPrice));
+
+        alert(`Transacción confirmada ✅\nHash: ${tx.hash}\nGas usado: ${gasUsed} ETH`);
       } catch (err) {
         alert("Error al enviar: " + err.message);
       }
     });
 
-  // Obtener historial real desde Holesky Etherscan
-btnHistory.addEventListener("click", async () => {
-  sendForm.classList.add("hidden");
-  historyDiv.classList.remove("hidden");
-  txList.innerHTML = "";
-  try {
-    const resp = await fetch(`${API_URL}?module=account&action=txlist&address=${account}&startblock=0&endblock=99999999&page=1&offset=5&sort=desc&apikey=${ETHERSCAN_API_KEY}`);
-    const data = await resp.json();
-    if (data.status === "1") {
-      data.result.forEach(tx => {
-        const li = document.createElement("li");
-        li.className = "bg-gray-100 rounded-lg p-3 mb-2 flex justify-between items-center shadow-sm";
+    // Ver historial
+    btnHistory.addEventListener("click", async () => {
+      sendForm.classList.add("hidden");
+      historyDiv.classList.remove("hidden");
+      txList.innerHTML = "";
+      transactions = [];
 
-        const tipo = tx.from.toLowerCase() === account.toLowerCase() ? "Enviado" : "Recibido";
-        const ethValue = parseFloat(ethers.utils.formatEther(tx.value)).toFixed(4);
+      try {
+        const resp = await fetch(`${API_URL}?module=account&action=txlist&address=${account}&startblock=0&endblock=99999999&page=1&offset=5&sort=desc&apikey=${ETHERSCAN_API_KEY}`);
+        const data = await resp.json();
 
-        li.innerHTML = `
-          <div>
-            <p class="font-semibold ${tipo === "Enviado" ? "text-red-600" : "text-green-600"}">${tipo}: ${ethValue} ETH</p>
-            <p class="text-xs text-gray-500">Block: ${tx.blockNumber}</p>
-          </div>
-          <a href="https://holesky.etherscan.io/tx/${tx.hash}" target="_blank" class="text-blue-600 hover:text-blue-800" title="Ver en Etherscan">
-            👁
-          </a>
-        `;
-        txList.appendChild(li);
-      });
-    } else {
-      txList.innerHTML = "<li>No se encontraron transacciones.</li>";
-    }
-  } catch (err) {
-    txList.innerHTML = "<li>Error al obtener historial.</li>";
-  }
-});
+        if (data.status === "1") {
+          data.result.forEach(tx => {
+            const tipo = tx.from.toLowerCase() === account.toLowerCase() ? "Enviado" : "Recibido";
+            const ethValue = parseFloat(ethers.utils.formatEther(tx.value)).toFixed(4);
+            const fecha = new Date(tx.timeStamp * 1000).toLocaleString();
+            const gas = ethers.utils.formatEther(tx.gasUsed * tx.gasPrice);
 
+            transactions.push({ tipo, monto: ethValue, hash: tx.hash, fecha, gas });
+
+            const li = document.createElement("li");
+            li.className = "bg-white rounded-lg p-4 shadow flex justify-between items-center border hover:shadow-md transition";
+            li.innerHTML = `
+              <div>
+                <p class="font-semibold ${tipo === "Enviado" ? "text-red-600" : "text-green-600"}">${tipo}: ${ethValue} ETH</p>
+                <p class="text-xs text-gray-500">Hash: ${tx.hash.slice(0,10)}...</p>
+                <p class="text-xs text-gray-400">Fecha: ${fecha}</p>
+              </div>
+              <a href="https://holesky.etherscan.io/tx/${tx.hash}" target="_blank" class="text-blue-600 hover:text-blue-800">👁</a>
+            `;
+            txList.appendChild(li);
+          });
+        } else {
+          txList.innerHTML = "<li>No se encontraron transacciones.</li>";
+        }
+      } catch (err) {
+        txList.innerHTML = "<li>Error al obtener historial.</li>";
+      }
+    });
+
+    // Exportar PDF PROFESIONAL
+    exportPDF.addEventListener("click", async () => {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+
+      // Logo
+      const logoUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/MetaMask_Fox.svg/1200px-MetaMask_Fox.svg.png";
+      const img = await fetch(logoUrl);
+      const blob = await img.blob();
+      const reader = new FileReader();
+      reader.readAsDataURL(blob);
+
+      reader.onloadend = function () {
+        const logoBase64 = reader.result;
+
+        // Header
+        doc.setFillColor(255, 136, 0);
+        doc.rect(0, 0, 220, 30, "F");
+        doc.addImage(logoBase64, "PNG", 160, 5, 30, 20);
+        doc.setFontSize(18);
+        doc.setTextColor(255, 255, 255);
+        doc.text("Reporte de Transacciones ETH", 14, 20);
+
+        // Info usuario
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(11);
+        doc.text(`Cuenta: ${account}`, 14, 40);
+        doc.text(`Generado: ${new Date().toLocaleString()}`, 14, 47);
+
+        // Tabla estilizada
+        const headers = [["#", "Tipo", "Monto (ETH)", "Hash", "Fecha", "Gas (ETH)"]];
+        const rows = transactions.map((tx, i) => [
+          i + 1,
+          tx.tipo,
+          tx.monto,
+          tx.hash,
+          tx.fecha,
+          tx.gas
+        ]);
+
+        doc.autoTable({
+          startY: 55,
+          head: headers,
+          body: rows,
+          theme: "striped",
+          headStyles: {
+            fillColor: [255, 136, 0],
+            textColor: 255,
+            fontSize: 11,
+            halign: "center"
+          },
+          styles: {
+            fontSize: 9,
+            cellPadding: 3,
+            lineWidth: 0.1,
+            lineColor: [200, 200, 200]
+          },
+          alternateRowStyles: {
+            fillColor: [245, 245, 245]
+          }
+        });
+
+        // Totales
+        const totalEnviado = transactions.filter(tx => tx.tipo === "Enviado")
+          .reduce((sum, tx) => sum + parseFloat(tx.monto), 0);
+        const totalRecibido = transactions.filter(tx => tx.tipo === "Recibido")
+          .reduce((sum, tx) => sum + parseFloat(tx.monto), 0);
+
+        const y = doc.lastAutoTable.finalY + 10;
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(0, 128, 0);
+        doc.text(`🟢 Total Recibido: ${totalRecibido.toFixed(4)} ETH`, 14, y);
+        doc.setTextColor(220, 53, 69);
+        doc.text(`🔴 Total Enviado: ${totalEnviado.toFixed(4)} ETH`, 14, y + 7);
+        doc.setTextColor(30, 144, 255);
+        doc.text(`💰 Saldo Neto: ${(totalRecibido - totalEnviado).toFixed(4)} ETH`, 14, y + 14);
+
+        // Footer
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text("DApp Holesky • Generado automáticamente", 14, 290);
+
+        doc.save("reporte-transacciones.pdf");
+      };
+    });
   </script>
 </body>
 </html>
